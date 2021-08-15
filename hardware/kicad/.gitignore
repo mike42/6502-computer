@@ -1,0 +1,11 @@
+# Backup files
+*.bck
+*.sch-bak
+*.kicad_pcb-bak
+
+# Cache files
+fp-info-cache
+
+# Generated files which can be re-created manually
+*.net
+
