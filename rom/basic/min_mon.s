@@ -5,25 +5,18 @@
 ; running [F6] then start the code with the RESET [CTRL][SHIFT]R. Just selecting RUN
 ; will do nothing, you'll still have to do a reset to run the code.
 
-      .include "basic.asm"
+      .include "basic.s"
 
 ; put the IRQ and MNI code in RAM so that it can be changed
 
 IRQ_vec     = VEC_SV+2        ; IRQ code vector
 NMI_vec     = IRQ_vec+$0A     ; NMI code vector
 
-; setup for the 6502 simulator environment
-
-IO_AREA     = $F000           ; set I/O area for this monitor
-
-ACIAsimwr   = IO_AREA+$01     ; simulated ACIA write port
-ACIAsimrd   = IO_AREA+$04     ; simulated ACIA read port
-
 ; now the code. all this does is set up the vectors and interrupt code
 ; and wait for the user to select [C]old or [W]arm start. nothing else
 ; fits in less than 128 bytes
 
-      *=    $FF80             ; pretend this is in a 1/8K ROM
+      .segment "CODE"         ; pretend this is in a 1/8K ROM
 
 ; reset vector points here
 
@@ -31,6 +24,7 @@ RES_vec
       CLD                     ; clear decimal mode
       LDX   #$FF              ; empty stack
       TXS                     ; set the stack
+      JSR ACIAsetup
 
 ; set up vectors and interrupt code, copy them to page 2
 
@@ -67,21 +61,63 @@ LAB_nokey
 LAB_dowarm
       JMP   LAB_WARM          ; do EhBASIC warm start
 
-; byte out to simulated ACIA
+; Polled 65c51 I/O routines adapted to EhBASIC. Delay routine from
+; http://forum.6502.org/viewtopic.php?f=4&t=2543&start=30#p29795
+ACIA_RX      = $8400
+ACIA_TX      = $8400
+ACIA_STATUS  = $8401
+ACIA_COMMAND = $8402
+ACIA_CONTROL = $8403
+
+ACIAsetup
+      LDA #$00                ; write anything to status register for program reset
+      STA ACIA_STATUS
+      LDA #$0B                ; %0000 1011 = Receiver odd parity check
+                              ;              Parity mode disabled
+                              ;              Receiver normal mode
+                              ;              RTSB Low, trans int disabled
+                              ;              IRQB disabled
+                              ;              Data terminal ready (DTRB low)
+      STA ACIA_COMMAND        ; set command register  
+      LDA #$1F                ; %0001 1111 = 19200 Baud
+                              ;              External receiver
+                              ;              8 bit words
+                              ;              1 stop bit
+      STA ACIA_CONTROL        ; set control register  
+      RTS
 
 ACIAout
-      STA   ACIAsimwr         ; save byte to simulated ACIA
+      PHA                     ; save A
+      LDA ACIA_STATUS         ; Read (and ignore) ACIA status register
+      PLA                     ; restore A
+      STA ACIA_TX             ; write byte
+      JSR ACIAdelay           ; delay because of bug
       RTS
 
-; byte in from simulated ACIA
+ACIAdelay
+      PHY                     ; Save Y Reg
+      PHX                     ; Save X Reg
+DELAY_LOOP
+      LDY   #6                ; Get delay value (clock rate in MHz 2 clock cycles)
+MINIDLY
+      LDX   #$68              ; Seed X reg
+DELAY_1
+      DEX                     ; Decrement low index
+      BNE   DELAY_1           ; Loop back until done
+      DEY                     ; Decrease by one
+      BNE   MINIDLY           ; Loop until done
+      PLX                     ; Restore X Reg
+      PLY                     ; Restore Y Reg
+DELAY_DONE
+      RTS                     ; Delay done, return
 
 ACIAin
-      LDA   ACIAsimrd         ; get byte from simulated ACIA
-      BEQ   LAB_nobyw         ; branch if no byte waiting
-
+      LDA ACIA_STATUS         ; get ACIA status
+      AND #$08                ; mask rx buffer status flag
+      BEQ LAB_nobyw           ; branch if no byte waiting
+      LDA ACIA_RX             ; get byte from ACIA data port
       SEC                     ; flag byte received
       RTS
-
 LAB_nobyw
       CLC                     ; flag no byte received
 no_load                       ; empty load vector for EhBASIC
@@ -126,7 +162,7 @@ LAB_mess
 
 ; system vectors
 
-      *=    $FFFA
+      .segment "VECTORS"
 
       .word NMI_vec           ; NMI vector
       .word RES_vec           ; RESET vector
