@@ -4,11 +4,11 @@ EELAYER END
 $Descr A4 11693 8268
 encoding utf-8
 Sheet 1 1
-Title ""
-Date ""
+Title "6502 Computer"
+Date "2021-08-22"
 Rev ""
-Comp ""
-Comment1 ""
+Comp "Michael Billington"
+Comment1 "https://github.com/mike42/6502-computer"
 Comment2 ""
 Comment3 ""
 Comment4 ""
@@ -2180,28 +2180,6 @@ F 3 "~" H 950 6000 50  0001 C CNN
 	1    950  6000
 	0    1    1    0   
 $EndComp
-Wire Bus Line
-	9550 1150 9550 2100
-Wire Bus Line
-	3150 4400 3150 5200
-Wire Bus Line
-	7750 950  7750 2400
-Wire Bus Line
-	5700 1750 5700 1900
-Wire Bus Line
-	9000 4300 9000 5650
-Wire Bus Line
-	3500 1800 3500 2150
-Wire Bus Line
-	10750 4550 10750 5300
-Wire Bus Line
-	2800 1050 2800 2700
-Wire Bus Line
-	3500 2450 3500 3450
-Wire Bus Line
-	5650 2500 5650 3450
-Wire Bus Line
-	2800 2900 2800 3600
 Wire Wire Line
 	1350 7400 1350 7450
 Connection ~ 1350 7400
@@ -2268,10 +2246,32 @@ L Device:R R4
 U 1 1 6218038F
 P 9100 3650
 F 0 "R4" H 9030 3604 50  0000 R CNN
-F 1 "3.3 k" H 9030 3695 50  0000 R CNN
+F 1 "3.3k" H 9030 3695 50  0000 R CNN
 F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal" V 9030 3650 50  0001 C CNN
 F 3 "~" H 9100 3650 50  0001 C CNN
 	1    9100 3650
 	0    1    1    0   
 $EndComp
+Wire Bus Line
+	5700 1750 5700 1900
+Wire Bus Line
+	3500 1800 3500 2150
+Wire Bus Line
+	2800 2900 2800 3600
+Wire Bus Line
+	3150 4400 3150 5200
+Wire Bus Line
+	9550 1150 9550 2100
+Wire Bus Line
+	10750 4550 10750 5300
+Wire Bus Line
+	3500 2450 3500 3450
+Wire Bus Line
+	5650 2500 5650 3450
+Wire Bus Line
+	9000 4300 9000 5650
+Wire Bus Line
+	7750 950  7750 2400
+Wire Bus Line
+	2800 1050 2800 2700
 $EndSCHEMATC
