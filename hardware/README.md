@@ -58,7 +58,7 @@ Notes on connectors:
 
 There is no product link for most of these, since I'm using items from capacitor/resistor/LED/diode packs.
 
-| Qty. | Part                                                   | Installed at                         | Product ref.                                                |
+| Qty. | Description                                            | Installed at                         | Product ref.                                                |
 | ---- | ------------------------------------------------------ | ------------------------------------ | ----------------------------------------------------------- |
 |    1 | 0.1µF ceramic capacitor, 2.54mm lead spacing (10 pack) | C1, C2, C3, C4, C5, C6, C7, C8, C10  | [Adafruit 753](https://au.mouser.com/ProductDetail/485-753) |
 |    1 | 1µF electrolytic capacitor, 1.5mm lead spacing         | C9                                   |                                                             |                  | 
