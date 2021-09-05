@@ -138,18 +138,24 @@ sys_exit:  ; Jump here to hand control back to shell
 ;
 ; Built-in command table
 ;
-built_in_count: .byte 2
+built_in_count: .byte 4
 built_in_cmd_offsets:
 .byte 0
 .byte 5
+.byte 11
+.byte 14
 
 built_in_cmd:
 .asciiz "echo"
 .asciiz "hello"
+.asciiz "rx"
+.asciiz "irqtest"
 
 built_in_main:
 .word shell_echo_main
 .word shell_hello_main
+.word shell_rx_main
+.word shell_irqtest_main
 
 ;
 ; Built-in command: echo
@@ -187,10 +193,84 @@ shell_hello_main:
 
 hello_world: .asciiz "Hello, world"
 
-nmi:
-  rti
+;
+; Built-in command: rx
+; Not yet implemented
+;
+shell_rx_main:
+  lda #0
+  jmp sys_exit
+
+; Set up a timer to trigger an IRQ
+IRQ_CONTROLLER = $8800
+
+shell_irqtest_main:
+  ; TODO print $00 instead
+  lda #$ff
+  sta $00
+  jsr hex_print_byte
+  jsr shell_newline
+  ; TODO do this using VIA timer / interrupt instead
+  jsr fake_irq
+  ; Print out which interrupt was used
+  lda $00
+  jsr hex_print_byte
+  jsr shell_newline
+  lda #0
+  jmp sys_exit
+
+fake_irq:
+  ldx IRQ_CONTROLLER        ; read interrupt controller to find highest-priority interrupt to service
+  jmp (isr_jump_table, X)   ; jump to matching service routine
+
+hex_print_byte:                 ; print accumulator as two ascii digits (hex)
+    pha                         ; store byte for later
+    lsr                         ; shift out lower nibble
+    lsr
+    lsr
+    lsr
+    tax
+    lda hex_chars, X            ; convert 0-15 to ascii char for hex digit
+    jsr acia_print_char         ; print upper nibble
+    pla                         ; retrieve byte again
+    and #$0f                    ; mask out upper nibble
+    tax
+    lda hex_chars, X            ; convert 0-15 to ascii char for hex digit
+    jsr acia_print_char         ; print lower nibble
+    rts
+hex_chars: .byte '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+
+irq0_isr:                   ; interrupt routine for VIA
+  stx $00                   ; store interrupt index for debugging
+;  ldx $8000                ; TODO clear interrupt flag on VIA
+;  rti                      ; TODO swap when used from irq later
+  rts
+
+nop_isr:                    ; interrupt routine for anything else
+  stx $00                   ; store interrupt index for debugging
+;  rti                      ; TODO swap when used from irq later
+  rts
+
+isr_jump_table:             ; 10 possible interrupt sources
+.word irq0_isr
+.word nop_isr
+.word nop_isr
+.word nop_isr
+.word nop_isr
+.word nop_isr
+.word nop_isr
+.word nop_isr
+.word nop_isr
+.word nop_isr
+.word nop_isr               ; when no source is triggering the interrupt
 
 irq:
+  ldx IRQ_CONTROLLER        ; read interrupt controller to find highest-priority interrupt to service
+  ; TODO when interrupts are being set from timer
+  ;jmp (isr_jump_table, X)   ; jump to matching service routine
+  rti
+
+nmi:
   rti
 
 .segment "VECTORS"
