@@ -139,24 +139,27 @@ sys_exit:  ; Jump here to hand control back to shell
 ;
 ; Built-in command table
 ;
-built_in_count: .byte 4
+built_in_count: .byte 5
 built_in_cmd_offsets:
 .byte 0
 .byte 5
 .byte 11
 .byte 14
+.byte 22
 
 built_in_cmd:
 .asciiz "echo"
 .asciiz "hello"
 .asciiz "rx"
 .asciiz "irqtest"
+.asciiz "run"
 
 built_in_main:
 .word shell_echo_main
 .word shell_hello_main
 .word shell_rx_main
 .word shell_irqtest_main
+.word shell_run_main
 
 ;
 ; Built-in command: echo
@@ -203,37 +206,43 @@ USER_PROGRAM_WRITE_PTR = $00 ; ZP address for writing user program
 
 shell_rx_main:
   ; Set pointers
-  lda #>USER_PROGRAM_START   ; High byte first
+  lda #<USER_PROGRAM_START   ; Low byte first
   sta USER_PROGRAM_WRITE_PTR
-  lda #<USER_PROGRAM_START   ; Low byte next
+  lda #>USER_PROGRAM_START   ; High byte next
   sta USER_PROGRAM_WRITE_PTR + 1
-
+  ; Delay so that we can set up file send
   lda #15                ; wait ~15 seconds
   jsr shell_rx_sleep_seconds
   ; NAK, ACK once
   lda #$15               ; NAK gets started
   jsr acia_print_char
+  jsr acia_recv_char     ; Should be SOH character - TODO test this
+@shell_rx_block:
   ; Receive one block
-  jsr acia_recv_char     ; SOH
   jsr acia_recv_char     ; Block number
-  jsr acia_recv_char     ; Inverse block
-  ldy #0                 ; Actually receive some chars?
+  jsr acia_recv_char     ; Inverse block number
+  ldy #0                 ; Start at char 0
 @shell_rx_char:
   jsr acia_recv_char
   sta (USER_PROGRAM_WRITE_PTR), Y
   iny
-  cpy #127
+  cpy #128
   bne @shell_rx_char
   jsr acia_recv_char     ; Checksum
-  lda #$6                ; ACK first packet ?
+  lda #$06               ; ACK the packet
   jsr acia_print_char
-  lda #1
-  jsr shell_rx_sleep_seconds
-  lda #$6                ; ACK the EOT as well ?
+  jsr acia_recv_char
+  cmp #$04              ; EOT char, no more blocks
+  beq @shell_rx_done
+  cmp #$01              ; SOH char, next block on the way
+  beq @shell_rx_block
+@shell_rx_done:
+  lda #$6               ; ACK the EOT as well.
   jsr acia_print_char
-  lda #1
+  lda #1                ; wait a moment (printing does not work otherwise..)
   jsr shell_rx_sleep_seconds
-  ; exit
+  jsr shell_rx_print_user_program
+  jsr shell_newline
   lda #0
   jmp sys_exit
 
@@ -264,6 +273,28 @@ shell_rx_sleep_seconds: ; sleep for 0-63 seconds (approx)
   pla
   rts
 
+shell_rx_print_user_program:
+; Print the first 255 bytes of uploaded user program
+  ldy #0
+@user_program_line:
+  jsr shell_newline
+  ldx #16               ; Number of hex digits per line
+@user_program_char:
+  lda USER_PROGRAM_START, Y
+  phx
+  jsr hex_print_byte    ; Print the char (clobbers X)
+  plx
+  lda #$20              ; space between chars
+  jsr acia_print_char
+  iny
+  cpy #0                ; Wrap-around at 255 bytes
+  beq @user_program_done
+  dex
+  cpx #0
+  bne @user_program_char
+  jmp @user_program_line
+@user_program_done:
+  rts
 
 ; test routine tp show what is being received over serial.
 ; receive bytes from ACIA, and echo them back in hex until Ctrl+C is pressed
@@ -287,6 +318,10 @@ shell_rx_print_chars:
   plx
   jsr shell_newline     ; line break
   rts
+
+; Jump into user program
+shell_run_main:
+  jmp USER_PROGRAM_START
 
 ; Set up a timer to trigger an IRQ
 IRQ_CONTROLLER = $8C00
@@ -330,7 +365,7 @@ shell_irqtest_main:
 ;  ldx IRQ_CONTROLLER        ; read interrupt controller to find highest-priority interrupt to service
 ;  jmp (isr_jump_table, X)   ; jump to matching service routine
 
-hex_print_byte:                 ; print accumulator as two ascii digits (hex)
+hex_print_byte:               ; print accumulator as two ascii digits (hex)
   pha                         ; store byte for later
   lsr                         ; shift out lower nibble
   lsr
