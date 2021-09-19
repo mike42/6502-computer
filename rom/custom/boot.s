@@ -1,3 +1,5 @@
+; Boot ROM for 6502 computer. Provides shell which can access test programs.
+
 .include "hardware/speaker.s"
 .include "hardware/acia.s"
 .include "hardware/via.s"
@@ -7,7 +9,6 @@ shell_cmd_id: .res 1
 shell_cmd_tmp: .res 1
 shell_buffer_used: .res 1
 shell_buffer: .res 64
-
 .segment "CODE"
 
 reset:
@@ -195,11 +196,97 @@ hello_world: .asciiz "Hello, world"
 
 ;
 ; Built-in command: rx
-; Not yet implemented
-;
+; Currently just waits 15 seconds, provides correct XMODEM responses to tell
+; the sender that it received one packet.
+USER_PROGRAM_START = $0400   ; Address for start of user programs
+USER_PROGRAM_WRITE_PTR = $00 ; ZP address for writing user program
+
 shell_rx_main:
+  ; Set pointers
+  lda #>USER_PROGRAM_START   ; High byte first
+  sta USER_PROGRAM_WRITE_PTR
+  lda #<USER_PROGRAM_START   ; Low byte next
+  sta USER_PROGRAM_WRITE_PTR + 1
+
+  lda #15                ; wait ~15 seconds
+  jsr shell_rx_sleep_seconds
+  ; NAK, ACK once
+  lda #$15               ; NAK gets started
+  jsr acia_print_char
+  ; Receive one block
+  jsr acia_recv_char     ; SOH
+  jsr acia_recv_char     ; Block number
+  jsr acia_recv_char     ; Inverse block
+  ldy #0                 ; Actually receive some chars?
+@shell_rx_char:
+  jsr acia_recv_char
+  sta (USER_PROGRAM_WRITE_PTR), Y
+  iny
+  cpy #127
+  bne @shell_rx_char
+  jsr acia_recv_char     ; Checksum
+  lda #$6                ; ACK first packet ?
+  jsr acia_print_char
+  lda #1
+  jsr shell_rx_sleep_seconds
+  lda #$6                ; ACK the EOT as well ?
+  jsr acia_print_char
+  lda #1
+  jsr shell_rx_sleep_seconds
+  ; exit
   lda #0
   jmp sys_exit
+
+shell_rx_sleep_seconds: ; sleep for 0-63 seconds (approx)
+  pha                   ; save registers
+  phx
+  phy
+  asl                   ; multiply A by 4, outer loop is approx 250ms.
+  asl
+@a_loop:
+  cmp #0                ; stop if A is 0 (outer loop)
+  beq @end
+  ldy #$ff              ; start Y at 255 and decrement (middle loop)
+@y_loop:
+  ldx #$ff
+@x_loop:                ; start Y at 255 and decrement (inner loop)
+  dex
+  cpx #0
+  bne @x_loop           ; end inner loop
+  dey
+  cpy #0
+  bne @y_loop           ; end middle loop
+  dec                   ; decrement A and repeat
+  jmp @a_loop           ; end outer loop
+@end:
+  ply                   ; restore registers
+  plx
+  pla
+  rts
+
+
+; test routine tp show what is being received over serial.
+; receive bytes from ACIA, and echo them back in hex until Ctrl+C is pressed
+shell_rx_print_chars:
+  ldx #26               ; Number of hex digits per line, fills 80 chars
+@next_byte:
+  phx
+  jsr acia_recv_char    ; get char
+  cmp #$03              ; Ctrl+C?
+  beq @done
+  jsr hex_print_byte    ; print as hex (2 digits)
+  lda #$20              ; space between chars
+  jsr acia_print_char
+  plx
+  dex
+  cpx #0
+  bne @next_byte        ; loop until x is 0
+  jsr shell_newline     ; line break
+  jmp shell_rx_print_chars
+@done:
+  plx
+  jsr shell_newline     ; line break
+  rts
 
 ; Set up a timer to trigger an IRQ
 IRQ_CONTROLLER = $8C00
