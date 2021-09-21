@@ -35,7 +35,6 @@ acia_recv_char:
   lda ACIA_STATUS             ; get ACIA status
   and #$08                    ; mask rx buffer status flag
   beq acia_recv_char          ; loop if rx buffer empty
-  lda SPEAKER
   lda ACIA_RX                 ; get byte from ACIA data port
   rts
 
