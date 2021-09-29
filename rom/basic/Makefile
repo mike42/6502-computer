@@ -3,7 +3,7 @@ LD65=/usr/bin/ld65
 
 basic.bin: min_mon.o
 	$(LD65) -o basic.bin \
-		-C ../sbc.cfg \
+		-C basic.cfg \
 		min_mon.o
 
 min_mon.o: min_mon.s basic.s
