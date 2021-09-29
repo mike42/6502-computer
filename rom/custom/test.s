@@ -1,11 +1,8 @@
-; locations of some functions in ROM
-acia_print_char = $c014
-acia_recv_char  = $c020
-shell_newline   = $c113
-sys_exit        = $c11e
+.import sys_exit, acia_print_char, shell_newline
 
-.segment "CODE"
-main:
+; Test of standalone program
+.org $0400
+
   ldx #0
 @test_char:
   lda test_string, X
@@ -19,4 +16,3 @@ main:
   jmp sys_exit
 
 test_string: .asciiz "Test program"
-
