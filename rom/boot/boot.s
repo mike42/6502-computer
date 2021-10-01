@@ -61,7 +61,10 @@ shell_next_char:
   jmp shell_next_char
 @run_command:
   jsr shell_newline
-  ; set command ID to 0  
+  ; set command ID to 0
+  ldx shell_buffer_used
+  cpx #0
+  beq @no_command
   lda #0
   sta shell_cmd_id
 @test_command_next:
@@ -71,7 +74,9 @@ shell_next_char:
   jsr shell_command_test
   inc shell_cmd_id
   jmp @test_command_next
-  
+@no_command:                    ; pressed enter with nothing at the prompt
+  jmp shell_next_command
+
 @command_not_found:
   ; Print not found message
   ldx #0
@@ -258,7 +263,7 @@ shell_rx_main:
   lda SPEAKER           ; Click each time we send a NAK or ACK
   lda #1                ; wait a moment (printing does not work otherwise..)
   jsr shell_rx_sleep_seconds
-  jsr shell_rx_print_user_program
+; jsr shell_rx_print_user_program
   jsr shell_newline
   lda #0
   jmp sys_exit

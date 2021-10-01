@@ -1,3 +1,6 @@
+;
+; Simple test program.
+;
 .import acia_print_char, shell_newline, sys_exit
 
 .segment "CODE"

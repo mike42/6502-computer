@@ -1,9 +1,9 @@
 SOURCE_FILES = $(wildcard *.s)
-PROGRAMS = $(addsuffix .bin, $(filter-out rom_defs, $(basename $(SOURCE_FILES))))
+PROGRAMS = $(addsuffix .bin, $(basename $(SOURCE_FILES)))
 
 all: $(PROGRAMS)
 
-%.bin: %.o rom_defs.o
+%.bin: %.o ../boot/generated/rom_defs.o
 	ld65 -o $@ -C program.cfg --dbgfile $(<:.o=.dbg) $^
 
 %.o: %.s

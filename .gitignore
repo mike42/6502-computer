@@ -1,4 +1,9 @@
+# Generated files
 *.o
 *.bin
 *.dbg
+rom/boot/generated/rom_defs.s
+
+# Project files
 .idea
+

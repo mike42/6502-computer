@@ -1,23 +1,27 @@
 MINIPRO=minipro
 
-all: rom.bin
+all: rom.bin programs
 
-rom.bin: basic custom
-	cat basic/basic.bin custom/boot.bin > rom.bin
+rom.bin: basic boot
+	cat basic/basic.bin boot/boot.bin > rom.bin
 
 basic:
 	$(MAKE) -C basic
 
-custom:
-	$(MAKE) -C custom
+boot:
+	$(MAKE) -C boot
+
+programs:
+	$(MAKE) -C programs
 
 clean:
 	rm -f rom.bin
 	$(MAKE) -C basic clean
-	$(MAKE) -C custom clean
+	$(MAKE) -C boot clean
+	$(MAKE) -C programs clean
 
 flashrom: rom.bin
 	$(MINIPRO) -p AT28C256 -w rom.bin
 
-.PHONY: all basic custom flashrom
+.PHONY: all basic boot programs flashrom
 
