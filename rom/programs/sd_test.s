@@ -5,32 +5,39 @@
 .import acia_print_char, shell_newline, sys_exit, VIA_DDRA, hex_print_byte, VIA_PORTA, shell_rx_sleep_seconds
 
 .segment "ZEROPAGE"
-string_ptr: .res 2
-tmp_1: .res 1
-tmp_2: .res 1
+string_ptr: .res 2        ; Pointer for printing
+out_tmp: .res 1           ; Used for shifting bit out
+in_tmp: .res 1            ; Used when shifing bits in
 
 .segment "CODE"
 main:
   jsr via_setup
   jsr sd_detect
   jsr sd_reset
-  jsr sd_cmd58
-
   lda #0
   jmp sys_exit
 
+; Pin direction PA7..PA0.
+CD   = %00000001
+CS   = %00000010
+MOSI = %00000100
+MISO = %00001000
+CLK  = %00010000
+
+OUTPUT_PINS = CS | MOSI | CLK
+
 ; Set up pin directions on the VIA and set initial values.
 via_setup:
-  lda #%00000110      ; CS and MOSI are high initially.
+  lda #(CS | MOSI)      ; CS and MOSI are high initially.
   sta VIA_PORTA
-  lda #%00010110      ; Pin direction PA7..PA0.
+  lda #OUTPUT_PINS
   sta VIA_DDRA
   rts
 
 ; Detect SD card. Checks the CD flag on PA0.
 sd_detect:
   lda VIA_PORTA
-  and #%00000001    ; Check CD. 0 is card not present, 1 is card present.
+  and #CD    ; Check CD. 0 is card not present, 1 is card present.
   cmp #$00
   beq @sd_not_detected
 @sd_detected:
@@ -64,137 +71,27 @@ print_string:
 @test_done:
   rts
 
-; Reset sequence for SD card, places it in SPI mode.
+; Reset sequence for SD card, places it in SPI mode etc.
 sd_reset:
   ; Toggle clock 74 times with MOSI and CS high.
   ldx #74
 @clock:
-  lda #%00000110
+  lda #(MOSI | CS)
   sta VIA_PORTA
-  lda #%00010110
+  lda #(MOSI | CS | CLK)
   sta VIA_PORTA
   dex
   cpx #0
   bne @clock
-; CMD0 - reset command
-  lda #%01000000
-  jsr sd_send_byte
-  lda #%00000000
-  jsr sd_send_byte
-  lda #%00000000
-  jsr sd_send_byte
-  lda #%00000000
-  jsr sd_send_byte
-  lda #%00000000
-  jsr sd_send_byte
-  lda #%10010101
-  jsr sd_send_byte
-  ; Receive response?
-  jsr sd_reset_wait
-  jsr hex_print_byte    ; Prints 00 if everything is OK.
-  jsr shell_newline
-  ; Switch CS high again
-  lda #%00010110
-  sta VIA_PORTA
+  jsr sd_cmd_go_idle_state
+  cmp #$01                 ; Reset OK?
+  bne @sd_reset_fail
+  jsr sd_cmd_send_if_cond
+  cmp #09                  ; Expect command to not be supported.
+  bne @sd_reset_fail
+  jsr sd_cmd_read_ocr
   rts
-
-sd_cmd58:
-; CMD58 - request contents of operating conditions register
-  lda #%01111010
-  jsr sd_send_byte
-  lda #%00000000
-  jsr sd_send_byte
-  lda #%00000000
-  jsr sd_send_byte
-  lda #%00000000
-  jsr sd_send_byte
-  lda #%00000000
-  jsr sd_send_byte
-  lda #%01110101
-  jsr sd_send_byte
-; Receive 40 bit response
-  jsr sd_recv_byte
-  jsr hex_print_byte
-  lda #$20
-  jsr acia_print_char
-
-  jsr sd_recv_byte
-  jsr hex_print_byte
-  lda #$20
-  jsr acia_print_char
-
-  jsr sd_recv_byte
-  jsr hex_print_byte
-  lda #$20
-  jsr acia_print_char
-
-  jsr sd_recv_byte
-  jsr hex_print_byte
-  lda #$20
-  jsr acia_print_char
-
-  jsr sd_recv_byte
-  jsr hex_print_byte
-  jsr shell_newline
-
-  ; Switch CS high again
-  lda #%00010110
-  sta VIA_PORTA
-  rts
-
-sd_send_byte:   ; Send 8 bits to SD card
-  sta tmp_1
-  ldx #8        ; Loop index
-@sd_send_bit:
-  dex
-  asl tmp_1                ; Shift A left, next bit to send is in carry bit.
-  bcs @sd_send_one
-@sd_send_zero:
-  lda #%00000000
-  sta VIA_PORTA
-  lda #%00010000
-  sta VIA_PORTA
-  lda #'0'         ; TODO debug..
-  jsr acia_print_char
-  cpx #0
-  beq @sd_send_done
-  jmp @sd_send_bit
-@sd_send_one:
-  lda #%00000100
-  sta VIA_PORTA
-  lda #%00010100
-  sta VIA_PORTA
-  lda #'1'         ; TODO debug..
-  jsr acia_print_char
-  cpx #0
-  beq @sd_send_done
-  jmp @sd_send_bit
-@sd_send_done:
-  lda #' '         ; TODO debug..
-  jsr acia_print_char
-  rts
-
-sd_reset_wait:
-  ldx #16                   ; Loop index - maximum of 16 clock cycles to respond
-@sd_recv_bit_wait:
-  dex
-  lda #%00000100            ; Toggle clock with MOSI high, CS low
-  sta VIA_PORTA
-  lda #%00010100
-  sta VIA_PORTA
-  ; read 1 bit response
-  lda VIA_PORTA
-  and #%00001000            ; mask out MISO only
-  cmp #%00000000            ; is it a a 0?
-  beq @sd_reset_recv
-  cpx #0
-  bne @sd_recv_bit_wait
-  jmp sd_reset_fail         ; did not receive a 0 within 16 cycles.
-@sd_reset_recv:             ; read remaining 7 bits of basic response
-  jsr sd_basic_response_recv
-  rts
-
-sd_reset_fail:
+@sd_reset_fail:
   ldx #<string_sd_reset_fail
   stx string_ptr
   ldx #>string_sd_reset_fail
@@ -205,53 +102,190 @@ sd_reset_fail:
   lda #1
   jmp sys_exit
 
-sd_recv_byte: ; read 8 bits of response
-  ldx #8
-  jmp sd_recv_bits
+; send SD card CMD0
+sd_cmd_go_idle_state:
+  ; Select chip
+  jsr sd_command_start
+  ; Send command
+  lda #%01000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%10010101
+  jsr sd_byte_send
 
-sd_basic_response_recv:     ; read 7 bits of response
-  ldx #7
-  jmp sd_recv_bits
+  lda #%11111111      ; One byte fill? (is this even byte-aligned?)
+  jsr sd_byte_send
 
-sd_recv_bits: ; Receive number of bits - depends on X register
-  lda #00
-  sta tmp_1
-@sd_basic_response_recv_bit:
-  asl tmp_1                 ; Shift previous result by 1 bit
-  dex
-  lda #%00000100            ; Toggle clock with MOSI high, CS low
+  lda #%11111111      ; Response comes through here.
+  jsr sd_byte_send
+  pha                 ; This will be 01 if everything is OK.
+
+  lda #%11111111      ; Another fill byte seems to help here.
+  jsr sd_byte_send
+
+  jsr sd_command_end
+  pla
+  rts
+
+; send SD card CMD8
+sd_cmd_send_if_cond:
+  ; Select chip
+  jsr sd_command_start
+  lda #%01001000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000001
+  jsr sd_byte_send
+  lda #%10101010
+  jsr sd_byte_send
+  lda #%00001111
+  jsr sd_byte_send
+
+  lda #%11111111      ; One byte fill?
+  jsr sd_byte_send
+  lda #%11111111      ; 5 byte response maybe?!
+  jsr sd_byte_send
+  pha                 ; This will be 09 if command is invalid
+  lda #%11111111
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+  jsr sd_command_end
+  pla                 ; Return that initial value
+  rts
+
+; send SD card CMD58
+sd_cmd_read_ocr:
+  jsr sd_command_start
+  lda #%01111010
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%01110101
+  jsr sd_byte_send
+
+  lda #%11111111      ; Fill
+  jsr sd_byte_send
+
+  lda #%11111111      ; 5 byte response
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+
+  lda #%11111111      ; More fill to check for expected 0xFF response.
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+
+  jsr sd_command_end
+  rts
+
+spi_debug = 1               ; Optional wrapper. Print everything!
+sd_command_start:
+  lda #0
   sta VIA_PORTA
-  lda #%00010100
+  rts
+
+sd_command_end:
+  ; De-select chip
+  lda #(MOSI | CS)
   sta VIA_PORTA
-  ; read 1 bit response
-  lda VIA_PORTA             ; Shifting until MISO is on the right
-  lsr
-  lsr
-  lsr
-  and #%00000001            ; Mask out other bits
-  jsr debug_a
-  ora tmp_1                 ; OR with previous result and store.
-  sta tmp_1
-  cpx #0
-  bne @sd_basic_response_recv_bit
-  lda tmp_1             ; WHY?!
-  pha                   ; TODO debug..
+.if spi_debug = 1
+  jsr shell_newline
+.endif
+  rts
+
+sd_byte_send:
+.if spi_debug = 1
+  phx
+  phy
   pha
+  jsr hex_print_byte
   lda #'/'
   jsr acia_print_char
   pla
+  ply
+  plx
+  jsr sd_byte_send_real
+  phx
+  phy
+  pha
   jsr hex_print_byte
   lda #' '
   jsr acia_print_char
-  pla                   ; end debug
-
-  rts                       ; All done.
-
-debug_a:
-  pha
-  adc #48
-  jsr acia_print_char
   pla
+  ply
+  plx
+  rts
+.endif
+sd_byte_send_real:        ; Send the byte stored in the A register
+  ldx #8
+  sta out_tmp
+  stz in_tmp
+@sd_send_bit:             ; Send one bit
+  asl in_tmp
+  asl out_tmp             ; Carry bit holds bit to send.
+  bcs @sd_send_1
+@sd_send_0:               ; Send a 0
+  lda #0
+  sta VIA_PORTA
+  lda #CLK
+  sta VIA_PORTA
+  ;jsr debug_0_sent
+  jmp @sd_send_bit_done
+@sd_send_1:               ; Send a 1
+  lda #MOSI
+  sta VIA_PORTA
+  lda #(MOSI | CLK)
+  sta VIA_PORTA
+  ;jsr debug_1_sent
+@sd_send_bit_done:        ; Check received bit
+  lda VIA_PORTA
+  and #MISO
+  cmp #MISO
+  beq @sd_recv_1
+@sd_recv_0:               ; Received a 0 - nothing to do.
+;  jsr debug_0_sent
+  jmp @sd_recv_done
+@sd_recv_1:               ; Received a 1
+  lda in_tmp
+  ora #%00000001
+  sta in_tmp
+;  jsr debug_1_sent
+@sd_recv_done:
+  dex
+  cpx #0
+  bne @sd_send_bit       ; Repeat until all 8 bits are sent
+;  jsr debug_byte_done
+  lda in_tmp
+;  jsr hex_print_byte
+;  jsr debug_byte_done
   rts
 
 string_sd_not_detected:   .asciiz "SD card not detected"
