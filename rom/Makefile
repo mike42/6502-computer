@@ -24,4 +24,3 @@ flashrom: rom.bin
 	$(MINIPRO) -p AT28C256 -w rom.bin
 
 .PHONY: all basic boot programs flashrom
-
