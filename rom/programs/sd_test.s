@@ -71,26 +71,46 @@ print_string:
 @test_done:
   rts
 
-; Reset sequence for SD card, places it in SPI mode etc.
+; Reset sequence for SD card, places it in SPI mode, completes initialization.
 sd_reset:
-  ; Toggle clock 74 times with MOSI and CS high.
   ldx #74
 @clock:
-  lda #(MOSI | CS)
-  sta VIA_PORTA
-  lda #(MOSI | CS | CLK)
-  sta VIA_PORTA
-  dex
-  cpx #0
-  bne @clock
+  jsr spi_nothing_byte    ; 80 cycles with MOSI and CS high.
+  jsr spi_nothing_byte
+  jsr spi_nothing_byte
+  jsr spi_nothing_byte
+  jsr spi_nothing_byte
+  jsr spi_nothing_byte
+  jsr spi_nothing_byte
+  jsr spi_nothing_byte
+  jsr spi_nothing_byte
+  jsr spi_nothing_byte
   jsr sd_cmd_go_idle_state
-  cmp #$01                 ; Reset OK?
+  cmp #$01                 ; Check for idle state
   bne @sd_reset_fail
   jsr sd_cmd_send_if_cond
-  cmp #09                  ; Expect command to not be supported.
+  cmp #01                  ; Expect command to be supported, indicating 2.x SD card.
   bne @sd_reset_fail
-  jsr sd_cmd_read_ocr
-  rts
+  jsr sd_cmd_read_ocr      ; Do not care about response here, but expect it to be supported
+  cmp #$01
+  bne @sd_reset_fail
+  jsr sd_cmd_app_cmd       ; Send app command to activiate initialisation process
+  cmp #$01
+  bne @sd_reset_fail
+  jsr sd_acmd_sd_send_op_cond
+  cmp #$01                 ; Expect initialisation in progress.
+  bne @sd_reset_fail
+  ldx #20                  ; max attempts
+@reset_wait:               ; Repeat last step until initialisation is complete
+  phx
+  jsr sd_cmd_app_cmd
+  jsr sd_acmd_sd_send_op_cond
+  plx
+  cmp #$00                 ; Init complete
+  beq @sd_reset_init_ok
+  dex
+  cpx #0                   ; max attempts exceeded
+  bne @reset_wait          ; repeat up to maximum, falls through to failure otherwise
 @sd_reset_fail:
   ldx #<string_sd_reset_fail
   stx string_ptr
@@ -101,6 +121,9 @@ sd_reset:
   ; Not OK. Terminate program.
   lda #1
   jmp sys_exit
+@sd_reset_init_ok:
+  jsr sd_cmd_read_ocr     ; TODO read response bit here for CCS
+  rts
 
 ; send SD card CMD0
 sd_cmd_go_idle_state:
@@ -127,9 +150,6 @@ sd_cmd_go_idle_state:
   jsr sd_byte_send
   pha                 ; This will be 01 if everything is OK.
 
-  lda #%11111111      ; Another fill byte seems to help here.
-  jsr sd_byte_send
-
   jsr sd_command_end
   pla
   rts
@@ -148,14 +168,14 @@ sd_cmd_send_if_cond:
   jsr sd_byte_send
   lda #%10101010
   jsr sd_byte_send
-  lda #%00001111
+  lda #%10000111
   jsr sd_byte_send
 
   lda #%11111111      ; One byte fill?
   jsr sd_byte_send
   lda #%11111111      ; 5 byte response maybe?!
   jsr sd_byte_send
-  pha                 ; This will be 09 if command is invalid
+  pha                 ; This will be 01 if command is valid / everything is OK
   lda #%11111111
   jsr sd_byte_send
   lda #%11111111
@@ -165,7 +185,7 @@ sd_cmd_send_if_cond:
   lda #%11111111
   jsr sd_byte_send
   jsr sd_command_end
-  pla                 ; Return that initial value
+  pla                 ; Return first byte of response
   rts
 
 ; send SD card CMD58
@@ -189,36 +209,99 @@ sd_cmd_read_ocr:
 
   lda #%11111111      ; 5 byte response
   jsr sd_byte_send
+  pha
   lda #%11111111
   jsr sd_byte_send
   lda #%11111111
   jsr sd_byte_send
   lda #%11111111
-  jsr sd_byte_send
-  lda #%11111111
-  jsr sd_byte_send
-
-  lda #%11111111      ; More fill to check for expected 0xFF response.
   jsr sd_byte_send
   lda #%11111111
   jsr sd_byte_send
 
   jsr sd_command_end
+  pla
   rts
 
-spi_debug = 1               ; Optional wrapper. Print everything!
+; send SD card CMD55
+sd_cmd_app_cmd:
+  jsr sd_command_start
+  lda #%01110111
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%11111111   ; Dummy CRC
+  jsr sd_byte_send
+
+  lda #%11111111      ; Fill
+  jsr sd_byte_send
+
+  lda #%11111111      ; 1 byte response
+  jsr sd_byte_send
+  pha
+
+  jsr sd_command_end
+  pla
+  rts
+
+; send SD card ACMD41
+sd_acmd_sd_send_op_cond:
+  jsr sd_command_start
+  lda #%01101001
+  jsr sd_byte_send
+  lda #%01000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%00000000
+  jsr sd_byte_send
+  lda #%11111111   ; Dummy CRC
+  jsr sd_byte_send
+
+  lda #%11111111      ; Fill
+  jsr sd_byte_send
+
+  lda #%11111111      ; 1 byte response
+  jsr sd_byte_send
+  pha
+
+  jsr sd_command_end
+  pla
+  rts
+
+spi_debug = 1               ; Triggers optional wrapper. Print everything!
 sd_command_start:
-  lda #0
-  sta VIA_PORTA
+  jsr spi_nothing_byte      ; Send 8 bits of nothing without SD selected
+  lda #%11111111            ; Send 8 bits of nothing w/ SD selected
+  jsr sd_byte_send
   rts
 
 sd_command_end:
-  ; De-select chip
-  lda #(MOSI | CS)
-  sta VIA_PORTA
+  lda #%11111111            ; Send 8 bits of nothing w/ SD selected
+  jsr sd_byte_send
+  jsr spi_nothing_byte      ; Send 8 bits of nothing without SD selected
 .if spi_debug = 1
   jsr shell_newline
 .endif
+  rts
+
+spi_nothing_byte:
+  ldx #8                    ; Send 8 bits of nothing, without SD selected
+@command_start_bit:
+  lda #(MOSI | CS)
+  sta VIA_PORTA
+  lda #(CLK | MOSI | CS)
+  dex
+  cpx #0
+  bne @command_start_bit
   rts
 
 sd_byte_send:
