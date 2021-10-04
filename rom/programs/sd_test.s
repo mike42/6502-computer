@@ -6,14 +6,31 @@
 
 .segment "ZEROPAGE"
 string_ptr: .res 2        ; Pointer for printing
-out_tmp: .res 1           ; Used for shifting bit out
-in_tmp: .res 1            ; Used when shifing bits in
+out_tmp:    .res 1        ; Used for shifting bit out
+in_tmp:     .res 1        ; Used when shifing bits in
+
+.segment "BSS"
+io_block_id:              .res 4
+io_buffer:                .res 512
 
 .segment "CODE"
 main:
   jsr via_setup
   jsr sd_detect
   jsr sd_reset
+  ; Set block ID to 0
+  stz io_block_id
+  stz io_block_id + 1
+  stz io_block_id + 2
+  stz io_block_id + 3
+  ; Read and print first block
+  jsr sd_read_single_block
+  jsr print_io_buffer
+  ; Read and print second block
+  inc io_block_id
+  jsr sd_read_single_block
+  jsr print_io_buffer
+
   lda #0
   jmp sys_exit
 
@@ -122,7 +139,7 @@ sd_reset:
   lda #1
   jmp sys_exit
 @sd_reset_init_ok:
-  jsr sd_cmd_read_ocr     ; TODO read response bit here for CCS
+  jsr sd_cmd_read_ocr      ; TODO read response bit here for CCS
   rts
 
 ; send SD card CMD0
@@ -143,11 +160,7 @@ sd_cmd_go_idle_state:
   lda #%10010101
   jsr sd_byte_send
 
-  lda #%11111111      ; One byte fill? (is this even byte-aligned?)
-  jsr sd_byte_send
-
-  lda #%11111111      ; Response comes through here.
-  jsr sd_byte_send
+  jsr sd_first_byte_of_response
   pha                 ; This will be 01 if everything is OK.
 
   jsr sd_command_end
@@ -171,10 +184,7 @@ sd_cmd_send_if_cond:
   lda #%10000111
   jsr sd_byte_send
 
-  lda #%11111111      ; One byte fill?
-  jsr sd_byte_send
-  lda #%11111111      ; 5 byte response maybe?!
-  jsr sd_byte_send
+  jsr sd_first_byte_of_response
   pha                 ; This will be 01 if command is valid / everything is OK
   lda #%11111111
   jsr sd_byte_send
@@ -239,11 +249,7 @@ sd_cmd_app_cmd:
   lda #%11111111   ; Dummy CRC
   jsr sd_byte_send
 
-  lda #%11111111      ; Fill
-  jsr sd_byte_send
-
-  lda #%11111111      ; 1 byte response
-  jsr sd_byte_send
+  jsr sd_first_byte_of_response
   pha
 
   jsr sd_command_end
@@ -266,18 +272,179 @@ sd_acmd_sd_send_op_cond:
   lda #%11111111   ; Dummy CRC
   jsr sd_byte_send
 
-  lda #%11111111      ; Fill
-  jsr sd_byte_send
-
-  lda #%11111111      ; 1 byte response
-  jsr sd_byte_send
+  jsr sd_first_byte_of_response
   pha
 
   jsr sd_command_end
   pla
   rts
 
-spi_debug = 1               ; Triggers optional wrapper. Print everything!
+; send SD card CMD17
+sd_read_single_block:
+  jsr sd_command_start
+  lda #%01010001
+  jsr sd_byte_send
+  lda io_block_id + 3
+  jsr sd_byte_send
+  lda io_block_id + 2
+  jsr sd_byte_send
+  lda io_block_id + 1
+  jsr sd_byte_send
+  lda io_block_id
+  jsr sd_byte_send
+
+  jsr sd_first_byte_of_response
+  cmp #$00                        ; OK, block coming up
+  bne @sd_read_single_block_fail
+  jsr sd_first_byte_of_response
+  cmp #$fe                        ; Start of block
+  bne @sd_read_single_block_fail
+
+  ldx #<io_buffer                 ; Set up pointer to I/O buffer
+  stx string_ptr
+  ldx #>io_buffer
+  stx string_ptr + 1
+
+@sd_read_page:                    ; read 255 bytes to I/O buffer, needs to be done twice
+  ldy #$ff
+@sd_read_page_next_byte:
+  lda #%11111111
+  phy
+  jsr sd_byte_send
+  sta (string_ptr), Y
+  ply
+  cpy #$00
+  beq @sd_read_page_done
+  dey
+  jmp @sd_read_page_next_byte
+@sd_read_page_done:               ; Done reading a page. Is this first or second?
+  ; Check high byte of string_ptr for second page
+  ldx #(>io_buffer + 1)
+  cpx string_ptr + 1
+  beq @sd_read_single_block_done
+  ; Bump to next page and repeat
+  stx string_ptr + 1
+  jmp @sd_read_page
+@sd_read_single_block_done:
+  lda #%11111111                  ; 16 byte CRC (ignored).
+  jsr sd_byte_send
+  lda #%11111111
+  jsr sd_byte_send
+@sd_read_single_block_fail:
+  jsr sd_command_end
+  rts
+
+print_io_buffer:
+  ; Set up pointer to first page of I/O buffer
+  ldx #<io_buffer
+  stx string_ptr
+  ldx #>io_buffer
+  stx string_ptr + 1
+  jsr hexdump_page
+  ;jsr hexdump_page
+  rts
+
+hexdump_page:
+  ; Hexdump one page of data, pointed to by string_ptr
+  ldx #16
+@hexdump_page_next_line:
+  phx
+  jsr hexdump_line
+  plx
+  cpx #0
+  beq @hexdump_page_done
+  dex
+  jmp @hexdump_page_next_line
+@hexdump_page_done:
+  rts
+
+; Given address in string_ptr, prints a line. Eg.
+; 0c00  67 67 67 67 67 67 67 67  67 67 67 67 67 67 67 67  gggggggggggggggg
+hexdump_line:
+  ; Print memory address first
+  lda string_ptr + 1      ;  High byte
+  jsr hex_print_byte
+  lda string_ptr          ;  Low byte
+  jsr hex_print_byte
+  lda #' '                ; Two spaces
+  jsr acia_print_char
+  jsr acia_print_char
+  jsr hexdump_line_hex    ; Print 16 bytes hex
+  lda #' '
+  jsr acia_print_char     ; Extra space
+  jsr hexdump_line_ascii  ; Print 16 bytes ascii
+  ; Print line in ASCII
+  ; Newline at the end
+  jsr shell_newline
+  ; Move pointer by 16 bytes
+  clc                   ; First byte
+  lda string_ptr
+  adc #16
+  sta string_ptr
+  lda string_ptr + 1    ; Second byte if carry set
+  adc #0
+  sta string_ptr + 1
+  rts
+
+hexdump_line_hex:
+  ; Print line in hex
+  ldy #0
+@hexdump_line_next_byte:
+  lda (string_ptr), Y
+  jsr hex_print_byte      ; Hex byte
+  lda #' '                ; Spaces between bytes
+  jsr acia_print_char
+  iny
+  cpy #8
+  beq @hexdump_line_half_way
+  cpy #16
+  beq @hexdump_line_done
+  jmp @hexdump_line_next_byte
+@hexdump_line_half_way:
+  lda #' '              ; Extra space after 8 bytes
+  jsr acia_print_char
+  jmp @hexdump_line_next_byte
+@hexdump_line_done:
+  rts
+
+hexdump_line_ascii:
+  ldy #0
+@hexdump_line_ascii_next_byte:
+  lda (string_ptr), Y     ; Print byte as ASCII
+  cmp #128                ; Substitute with '.' if >= 128
+  bcs @char_subst
+  cmp #32                 ; Print if >= 32
+  bcs @char_print
+@char_subst:              ; Fallthrough to substitute
+  lda #'.'
+@char_print:
+  jsr acia_print_char
+  iny
+  cpy #16
+  beq @hexdump_line_ascii_done
+  jmp @hexdump_line_ascii_next_byte
+@hexdump_line_ascii_done:
+  rts
+
+
+; Send $ff to the SD card, return the first non-fill byte we get back in the A register.
+; Returns $ff if the SD does not respond with a non-fill byte after 255 bytes.
+sd_first_byte_of_response:
+  ldx #$ff            ; Limit before failure
+@spi_consume_fill_byte:
+  lda #%11111111      ; Fill
+  phx                 ; Preserve X, send the byte
+  jsr sd_byte_send
+  plx
+  cmp #%11111111      ; Empty response?
+  bne @spi_consume_fill_bytes_done
+  dex                 ; Repeat up to limit
+  cpx #$00
+  bne @spi_consume_fill_byte
+@spi_consume_fill_bytes_done:
+  rts
+
+spi_debug = 0               ; Triggers optional wrapper. Print everything!
 sd_command_start:
   jsr spi_nothing_byte      ; Send 8 bits of nothing without SD selected
   lda #%11111111            ; Send 8 bits of nothing w/ SD selected

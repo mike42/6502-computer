@@ -5,6 +5,7 @@ This directory contains information about the hardware side of this project.
 - [kicad/](https://github.com/mike42/6502-computer/tree/main/hardware/kicad) - CAD source files for schematic and PCB
 - [gerber/](https://github.com/mike42/6502-computer/tree/main/hardware/gerber/) - PCB manufacturing files 
 - [6502_computer_schematic.pdf](https://github.com/mike42/6502-computer/tree/main/hardware/6502_computer_schematic.pdf) - Human-readable schematic
+- [case/](https://github.com/mike42/6502-computer/tree/main/hardware/case/) - STL files for 3D printed computer case.
 - Parts list (below)
 
 ## Parts list
