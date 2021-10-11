@@ -12,6 +12,9 @@ This directory contains information about the hardware side of this project.
 
 This is the full list of parts which are required to fully populate the PCB for this build. I've stuck with the parts which I actually used, though many can be substituted if you check the data sheets.
 
+![PCB diagram](https://raw.githubusercontent.com/mike42/6502-computer/main/hardware/6502_computer_pcb_diagram.svg)
+
+
 ### IC’s and sockets
 
 Notes on IC's and sockets
