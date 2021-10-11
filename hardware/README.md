@@ -8,9 +8,9 @@ This directory contains information about the hardware side of this project.
 - [case/](https://github.com/mike42/6502-computer/tree/main/hardware/case/) - STL files for 3D printed computer case.
 - Parts list (below)
 
-## Parts list
+## Parts list for PCB only
 
-This is the full list of parts for this build. I've stuck with the parts which I actually used, though many can be substituted if you check the data sheets.
+This is the full list of parts which are required to fully populate the PCB for this build. I've stuck with the parts which I actually used, though many can be substituted if you check the data sheets.
 
 ### IC’s and sockets
 
@@ -62,8 +62,13 @@ There is no product link for most of these, since I'm using items from capacitor
 | Qty. | Description                                            | Installed at                         | Product ref.                                                |
 | ---- | ------------------------------------------------------ | ------------------------------------ | ----------------------------------------------------------- |
 |    1 | 0.1µF ceramic capacitor, 2.54mm lead spacing (10 pack) | C1, C2, C3, C4, C5, C6, C7, C8, C10  | [Adafruit 753](https://au.mouser.com/ProductDetail/485-753) |
-|    1 | 1µF electrolytic capacitor, 1.5mm lead spacing         | C9                                   |                                                             |                  | 
+|    1 | 1µF electrolytic capacitor, 1.5mm lead spacing         | C9                                   |                                                             |
 |    1 | 1N5819 schottky diode                                  | D1                                   |                                                             |
 |    1 | 5.0mm LED                                              | D2                                   |                                                             |
 |    3 | 3.3k resistor 1/4w                                     | R1 R2 R4                             |                                                             |
 |    1 | 1k resistor 1/4w                                       | R3                                   |                                                             |
+
+## Extra parts for installing in case
+
+TBD.
+
