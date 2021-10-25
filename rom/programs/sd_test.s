@@ -306,16 +306,16 @@ sd_read_single_block:
   stx string_ptr + 1
 
 @sd_read_page:                    ; read 255 bytes to I/O buffer, needs to be done twice
-  ldy #$ff
+  ldy #$00
 @sd_read_page_next_byte:
   lda #%11111111
   phy
   jsr sd_byte_send
   sta (string_ptr), Y
   ply
-  cpy #$00
+  cpy #$ff
   beq @sd_read_page_done
-  dey
+  iny
   jmp @sd_read_page_next_byte
 @sd_read_page_done:               ; Done reading a page. Is this first or second?
   ; Check high byte of string_ptr for second page
