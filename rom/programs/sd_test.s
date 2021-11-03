@@ -16,7 +16,6 @@ io_buffer:                .res 512
 .segment "CODE"
 main:
   jsr via_setup
-  jsr sd_detect
   jsr sd_reset
   ; Set block ID to 0
   stz io_block_id
@@ -35,11 +34,10 @@ main:
   jmp sys_exit
 
 ; Pin direction PA7..PA0.
-CD   = %00000001
-CS   = %00000010
+CS   = %00001000
 MOSI = %00000100
-MISO = %00001000
-CLK  = %00010000
+MISO = %00000001
+CLK  = %00000010
 
 OUTPUT_PINS = CS | MOSI | CLK
 
@@ -50,31 +48,6 @@ via_setup:
   lda #OUTPUT_PINS
   sta VIA_DDRA
   rts
-
-; Detect SD card. Checks the CD flag on PA0.
-sd_detect:
-  lda VIA_PORTA
-  and #CD    ; Check CD. 0 is card not present, 1 is card present.
-  cmp #$00
-  beq @sd_not_detected
-@sd_detected:
-  ldx #<string_sd_detected
-  stx string_ptr
-  ldx #>string_sd_detected
-  stx string_ptr + 1
-  jsr print_string
-  jsr shell_newline
-  rts
-@sd_not_detected:
-  ldx #<string_sd_not_detected
-  stx string_ptr
-  ldx #>string_sd_not_detected
-  stx string_ptr + 1
-  jsr print_string
-  jsr shell_newline
-  ; Not OK. Terminate program.
-  lda #1
-  jmp sys_exit
 
 ; Print null terminated string
 print_string:
@@ -306,16 +279,16 @@ sd_read_single_block:
   stx string_ptr + 1
 
 @sd_read_page:                    ; read 255 bytes to I/O buffer, needs to be done twice
-  ldy #$ff
+  ldy #$00
 @sd_read_page_next_byte:
   lda #%11111111
   phy
   jsr sd_byte_send
   sta (string_ptr), Y
   ply
-  cpy #$00
+  cpy #$ff
   beq @sd_read_page_done
-  dey
+  iny
   jmp @sd_read_page_next_byte
 @sd_read_page_done:               ; Done reading a page. Is this first or second?
   ; Check high byte of string_ptr for second page
@@ -538,6 +511,4 @@ sd_byte_send_real:        ; Send the byte stored in the A register
 ;  jsr debug_byte_done
   rts
 
-string_sd_not_detected:   .asciiz "SD card not detected"
-string_sd_detected:       .asciiz "SD card detected"
 string_sd_reset_fail:     .asciiz "SD card reset failed"
