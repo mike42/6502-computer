@@ -17,7 +17,7 @@ Take a look at the [hardware/](https://github.com/mike42/6502-computer/tree/main
 
 ### Image of completed build
 
-<img src="https://raw.githubusercontent.com/mike42/6502-computer/main/hardware/6502_computer_in_case.jpg" alt="Completed project" width="600" height="450">
+<img src="https://raw.githubusercontent.com/mike42/6502-computer/main/hardware/6502_computer_in_case.jpg" alt="Completed project" width="600">
 
 ## Blog series
 
