@@ -33,6 +33,7 @@ This project started out on breadboards, and I have been blogging about it as I 
 - [Designing a 3D printed enclosure for my KiCad project in Blender](https://mike42.me/blog/2021-11-designing-a-3d-printed-enclosure-for-my-kicad-project-in-blender)
 - [Implementing the XMODEM protocol for file transfer](https://mike42.me/blog/2021-12-implementing-the-xmodem-protocol-for-file-transfer)
 - [Adding an SD card reader to my 6502 computer](https://mike42.me/blog/2021-12-adding-an-sd-card-reader-to-my-6502-computer)
+- [Assembling my 6502 computer](https://mike42.me/blog/2012-12-assembling-my-6502-computer)
 
 ## Licenses & acknowledgement
 
