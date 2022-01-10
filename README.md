@@ -4,7 +4,7 @@ This repository contains the hardware and software for my home-built 65C02-based
 
 It features an SD card interface, simple audio interface, and two user-selectable ROMs. One ROM contains a port of EhBASIC, which is the only proprietary component in this repository. The other ROM contains a shell, written from scratch to be free and open source, which can be used to load machine-language programs from a modern PC.
 
-Take a look at the [hardware/](https://github.com/mike42/6502-computer/tree/main/hardware) directory for how it's made.
+Take a look at the [hardware/](https://github.com/mike42/6502-computer/tree/main/hardware) directory for how it's made, or [rom/](https://github.com/mike42/6502-computer/tree/main/rom) for the firmware source code.
 
 ### Basic specs
 
