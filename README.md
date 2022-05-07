@@ -38,7 +38,7 @@ This project started out on breadboards, and I have been blogging about it as I 
 
 ## Licenses & acknowledgement
 
-With the exception of the files noted below, this work is licensed under a [Creative Commons Attribution 4.0 International License](http://creativecommons.org/licenses/by/4.0/).
+With the exception of the files noted below, this work is © 2021 Michael Billington, and is licensed under a [Creative Commons Attribution 4.0 International License](http://creativecommons.org/licenses/by/4.0/).
 
 The design is an extension of [Ben Eater's 6502 computer tutorial](https://eater.net/6502), which is itself based on the work of the [6502.org](http://www.6502.org/) community.
 
